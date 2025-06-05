@@ -20,6 +20,9 @@ namespace Tutorial__12.Services
             var totalPages = (int)Math.Ceiling((double)totalTrips / pageSize);
 
             var trips = await _context.Trips
+                .Include(t => t.IdCountries)
+                .Include(t => t.ClientTrips)
+                .ThenInclude(ct => ct.IdClientNavigation)
                 .OrderByDescending(t => t.DateFrom)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
