@@ -73,43 +73,54 @@ namespace Tutorial__12.Services
 
         public async Task AddClientToTripAsync(AddClientToTripDto dto)
         {
-            var existingClient = await _context.Clients
-                .FirstOrDefaultAsync(c => c.Pesel == dto.Pesel);
-
-            if (existingClient != null)
-                throw new InvalidOperationException("Client with this PESEL already exists");
-            
-            if (await IsClientRegisteredForTripAsync(dto.Pesel, dto.IdTrip))
-                throw new InvalidOperationException("Client is already registered for this trip");
-            
-            if (!await TripExistsAsync(dto.IdTrip))
-                throw new InvalidOperationException("Trip does not exist");
-            
-            if (!await IsTripInFutureAsync(dto.IdTrip))
-                throw new InvalidOperationException("Cannot register for a trip that has already occurred");
-            
-            var newClient = new Client
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
             {
-                FirstName = dto.FirstName,
-                LastName = dto.LastName,
-                Email = dto.Email,
-                Telephone = dto.Telephone,
-                Pesel = dto.Pesel
-            };
+                var existingClient = await _context.Clients
+                    .FirstOrDefaultAsync(c => c.Pesel == dto.Pesel);
 
-            _context.Clients.Add(newClient);
-            await _context.SaveChangesAsync();
-            
-            var clientTrip = new ClientTrip
+                if (existingClient != null)
+                    throw new InvalidOperationException("Client with this PESEL already exists");
+        
+                if (await IsClientRegisteredForTripAsync(dto.Pesel, dto.IdTrip))
+                    throw new InvalidOperationException("Client is already registered for this trip");
+        
+                if (!await TripExistsAsync(dto.IdTrip))
+                    throw new InvalidOperationException("Trip does not exist");
+        
+                if (!await IsTripInFutureAsync(dto.IdTrip))
+                    throw new InvalidOperationException("Cannot register for a trip that has already occurred");
+        
+                var newClient = new Client
+                {
+                    FirstName = dto.FirstName,
+                    LastName = dto.LastName,
+                    Email = dto.Email,
+                    Telephone = dto.Telephone,
+                    Pesel = dto.Pesel
+                };
+
+                _context.Clients.Add(newClient);
+                await _context.SaveChangesAsync();
+        
+                var clientTrip = new ClientTrip
+                {
+                    IdClient = newClient.IdClient,
+                    IdTrip = dto.IdTrip,
+                    RegisteredAt = DateTime.Now,
+                    PaymentDate = dto.PaymentDate
+                };
+
+                _context.ClientTrips.Add(clientTrip);
+                await _context.SaveChangesAsync();
+        
+                await transaction.CommitAsync();
+            }
+            catch
             {
-                IdClient = newClient.IdClient,
-                IdTrip = dto.IdTrip,
-                RegisteredAt = DateTime.Now,
-                PaymentDate = dto.PaymentDate
-            };
-
-            _context.ClientTrips.Add(clientTrip);
-            await _context.SaveChangesAsync();
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
         
         public async Task AddCountryToTripAsync(int tripId, int countryId)

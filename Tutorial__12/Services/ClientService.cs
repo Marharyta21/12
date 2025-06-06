@@ -24,15 +24,26 @@ namespace Tutorial__12.Services
 
         public async Task DeleteClientAsync(int clientId)
         {
-            var client = await _context.Clients.FindAsync(clientId);
-            if (client == null)
-                throw new InvalidOperationException("Client not found");
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                var client = await _context.Clients.FindAsync(clientId);
+                if (client == null)
+                    throw new InvalidOperationException("Client not found");
 
-            if (await ClientHasTripsAsync(clientId))
-                throw new InvalidOperationException("Cannot delete client with assigned trips");
+                if (await ClientHasTripsAsync(clientId))
+                    throw new InvalidOperationException("Cannot delete client with assigned trips");
 
-            _context.Clients.Remove(client);
-            await _context.SaveChangesAsync();
+                _context.Clients.Remove(client);
+                await _context.SaveChangesAsync();
+        
+                await transaction.CommitAsync();
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
     }
 }
